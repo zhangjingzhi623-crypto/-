@@ -14,19 +14,19 @@ export default async function handler(req, res) {
     const apiKey = (process.env.GEMINI_API_KEY || "").trim();
     if (!apiKey) return res.status(500).json({ error: '服务端未读取到 API Key' });
 
-    // 日志标记
-    console.log("正在尝试运行 gemini-2.0-flash-exp (实验版测试)");
+    // 日志标记：确认运行的是 Latest 版本
+    console.log("正在尝试运行 gemini-flash-latest (自动路由版)");
 
     const { prompt, isJson } = req.body;
     if (!prompt) return res.status(400).json({ error: 'Prompt is empty' });
 
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // 🔥 关键修改：使用 2.0 实验版
-    // 根据你的列表，这个模型存在 (gemini-2.0-flash-exp)
-    // 且通常拥有独立的免费测试额度
+    // 🔥 关键修改：使用 gemini-flash-latest
+    // 这是一个永久有效的别名，它会自动寻找你有权访问的那个 Flash 模型
+    // 从而避开具体版本号的 404 或 429 问题
     const model = genAI.getGenerativeModel({ 
-        model: "gemini-2.0-flash-exp", 
+        model: "gemini-flash-latest", 
         generationConfig: isJson ? { responseMimeType: "application/json" } : {}
     });
 
@@ -38,7 +38,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error("API Error:", error);
-    // 如果这个还不行，我们只能试 gemini-flash-latest 了
     return res.status(500).json({ error: error.message });
   }
 }
