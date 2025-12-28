@@ -12,18 +12,25 @@ export interface Task {
   // Computed
   importanceScore: number;
   easeScore: number;
+  
+  isCompleted?: boolean; // Added for Todo functionality in Matrix
 }
 
 export interface ZoneItem {
   id: string;
   content: string;
   createdAt: number;
+  isCompleted?: boolean; 
+  completedAt?: number;
+  aiActionPlan?: string;
+  sourceMatrixId?: string; // Link back to matrix task if applicable
 }
 
 export interface DashboardData {
-  zone1_work: ZoneItem[];
-  zone2_strategy: string; // Text block
-  zone3_birthdate: string; // ISO Date string
+  matrix_tasks: Task[]; // Persist matrix tasks
+  zone1_inspiration: ZoneItem[]; // Was work inspiration
+  zone2_work: ZoneItem[]; // Was strategy (now list)
+  zone3_birthdate: string;
   zone4_knowledge: ZoneItem[];
   zone5_misc: ZoneItem[];
   zone6_thinking: ZoneItem[];
@@ -31,5 +38,6 @@ export interface DashboardData {
 
 export enum AppTab {
   MATRIX = 'matrix',
-  DASHBOARD = 'dashboard'
+  DASHBOARD = 'dashboard',
+  REVIEW = 'review'
 }
