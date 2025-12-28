@@ -27,7 +27,7 @@ export default async function handler(req, res) {
     const genAI = new GoogleGenerativeAI(apiKey);
     
     // 4. 使用更稳定的模型别名
-    const model = genAI.getGenerativeModel({ 
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
         model: "gemini-1.5-flash-latest", // 这里的名字改了一下
         generationConfig: isJson ? { responseMimeType: "application/json" } : {}
     });
