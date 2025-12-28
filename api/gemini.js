@@ -2,8 +2,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export default async function handler(req, res) {
-  // 1. 跨域设置
-  res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -16,17 +14,15 @@ export default async function handler(req, res) {
 
     const { prompt, isJson } = req.body;
     
-    // 如果前端发来的 prompt 是空的，做个保护
     if (!prompt) return res.status(400).json({ error: 'Prompt is empty' });
 
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // 🔥 关键修改：使用你列表里存在的、稳定的 2.0 版本
-    // 根据你的日志，这个模型是 "Stable version ... released in January of 2025"
-    const modelName = "gemini-2.0-flash-001"; 
-
+    // 🔥 关键修改：换回 1.5 Flash
+    // 之前报 404 是因为 Key 填反了，现在 Key 好了，这个模型一定能用！
+    // 它是免费版里最快、限制最少的。
     const model = genAI.getGenerativeModel({ 
-        model: modelName,
+        model: "gemini-1.5-flash", 
         generationConfig: isJson ? { responseMimeType: "application/json" } : {}
     });
 
@@ -38,6 +34,7 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error("生成失败:", error);
+    // 把 Google 的具体报错吐出来，方便调试
     return res.status(500).json({ error: error.message });
   }
 }
