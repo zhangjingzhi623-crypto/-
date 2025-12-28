@@ -1,52 +1,63 @@
 // api/gemini.js
+// 这是一个纯 JavaScript 文件，Vercel 可以直接运行
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export default async function handler(req, res) {
-  // 1. 跨域设置
+  // 1. 设置跨域 (CORS)
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  // 处理预检请求
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
 
   try {
-    // 2. 关键修改：加了 .trim() 去除多余空格
+    // 2. 获取并清理 Key
     const apiKey = (process.env.GEMINI_API_KEY || "").trim();
 
     if (!apiKey) {
-      console.error("API Key is missing or empty");
-      return res.status(500).json({ error: 'Config Error: API Key is missing' });
+      console.error("API Key 未配置");
+      return res.status(500).json({ error: '服务端未配置 API Key' });
     }
 
-    // 3. 打印 Key 的前几位，方便在 Vercel 日志里调试 (不会泄露全名)
-    console.log("Using Key starting with:", apiKey.substring(0, 5) + "...");
-
+    // 3. 接收前端数据
     const { prompt, isJson } = req.body;
     
+    // 4. 初始化模型
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // 4. 使用更稳定的模型别名
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
-        model: "gemini-1.5-flash-latest", // 这里的名字改了一下
+    // 使用 gemini-1.5-flash-001 (这是目前最稳的版本号)
+    const model = genAI.getGenerativeModel({ 
+        model: "gemini-1.5-flash-001",
         generationConfig: isJson ? { responseMimeType: "application/json" } : {}
     });
 
+    // 5. 生成内容
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
 
+    // 6. 返回结果
     return res.status(200).json({ text });
 
   } catch (error) {
-    // 5. 打印详细错误到 Vercel 日志
     console.error("Gemini API Error:", error);
     
-    // 如果是 404，提示用户可能是模型名字或者是 Key 的问题
-    if (error.message.includes('404')) {
-        return res.status(500).json({ error: 'Google 报 404: 可能是 Key 多了空格，或模型名称不对' });
+    // 友好的错误提示
+    let errorMessage = error.message;
+    if (errorMessage.includes('404')) {
+        errorMessage = '模型未找到 (404)，请检查模型名称是否正确';
+    } else if (errorMessage.includes('403') || errorMessage.includes('API key')) {
+        errorMessage = 'API Key 无效或无权限';
     }
-    
-    return res.status(500).json({ error: error.message });
+
+    return res.status(500).json({ error: errorMessage });
   }
 }
