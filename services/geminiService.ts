@@ -1,11 +1,27 @@
-import { GoogleGenAI } from "@google/genai";
+// 修改后的前端代码：不再直接连 Google，而是连 api/gemini
 import { Task } from "../types";
 
-const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
+// --- 通用的发送工具 ---
+async function callGeminiAPI(prompt: string, isJson: boolean = false) {
+  try {
+    const response = await fetch('/api/gemini', { // 请求刚才建立的 api/gemini.js
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, isJson })
+    });
 
+    if (!response.ok) throw new Error('Network response was not ok');
+    
+    const data = await response.json();
+    return data.text || "";
+  } catch (error) {
+    console.error("AI调用失败:", error);
+    return "";
+  }
+}
+
+// 1. 分析任务矩阵
 export const analyzeTasks = async (tasks: Task[]): Promise<string> => {
-  if (!apiKey) return "请配置 API Key。";
   if (tasks.length === 0) return "矩阵目前是空的。";
 
   const taskSummary = tasks.filter(t => !t.isCompleted).map(t => 
@@ -23,92 +39,57 @@ export const analyzeTasks = async (tasks: Task[]): Promise<string> => {
     请用中文。
   `;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt
-    });
-    return response.text || "无建议。";
-  } catch (error) {
-    console.error("Gemini Error:", error);
-    return "AI 暂时不可用。";
-  }
+  const result = await callGeminiAPI(prompt);
+  return result || "AI 暂时不可用。";
 };
 
+// 2. 生成执行方案
 export const generateActionPlan = async (inspiration: string): Promise<string> => {
-  if (!apiKey) return "请配置 API Key。";
-
   const prompt = `
     为灵感 "${inspiration}" 生成落地执行方案。
     要求：3-5个步骤，第一步需符合5分钟启动法。中文回答。
   `;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt
-    });
-    return response.text || "无方案。";
-  } catch (error) {
-    return "生成失败。";
-  }
+  const result = await callGeminiAPI(prompt);
+  return result || "生成失败。";
 };
 
+// 3. 评估任务属性 (JSON)
 export const evaluateTaskAttributes = async (title: string): Promise<Partial<Task>> => {
-  if (!apiKey) return {};
-
   const prompt = `
-    Evaluate the task "${title}" on a scale of 1-10 for the following attributes:
-    1. Benefit (How beneficial is it?)
-    2. Impact (How wide is the impact?)
-    3. Diffusion (Does it lead to other successes?)
-    4. TimeEfficiency (10 = Very Quick/Short time, 1 = Very Long)
-    5. Simplicity (10 = Very Easy/Low Skill, 1 = Very Hard)
-
+    Evaluate the task "${title}" on a scale of 1-10 for: Benefit, Impact, Diffusion, TimeEfficiency, Simplicity.
     Return ONLY a JSON object like: {"benefit": 8, "impact": 5, "diffusion": 4, "timeEfficiency": 6, "simplicity": 7}
   `;
 
+  // 第二个参数 true 表示告诉后端我们要 JSON
+  const jsonString = await callGeminiAPI(prompt, true); 
+
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: { responseMimeType: 'application/json' }
-    });
-    
-    const text = response.text;
-    if (!text) return {};
-    return JSON.parse(text);
+    if (!jsonString) return {};
+    return JSON.parse(jsonString);
   } catch (error) {
-    console.error("Evaluation Error:", error);
+    console.error("JSON解析失败:", error);
     return {};
   }
 };
 
+// 4. 任务分类
 export const classifyTaskCategory = async (title: string): Promise<string> => {
-  if (!apiKey) return 'zone2_work'; // Default to work
-
   const prompt = `
     Classify the task "${title}" into one of these 4 categories:
-    - "zone1_inspiration" (Ideation, creative sparks, vague ideas)
-    - "zone2_work" (Concrete work tasks, projects, strategy execution)
-    - "zone4_knowledge" (Reading, learning, research)
-    - "zone5_misc" (Errands, chores, shopping, health)
-
+    - "zone1_inspiration"
+    - "zone2_work"
+    - "zone4_knowledge"
+    - "zone5_misc"
     Return ONLY the category string.
   `;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt
-    });
-    const result = response.text?.trim();
-    const validZones = ['zone1_inspiration', 'zone2_work', 'zone4_knowledge', 'zone5_misc'];
-    if (result && validZones.includes(result)) {
-      return result;
-    }
-    return 'zone2_work';
-  } catch (error) {
-    return 'zone2_work';
+  const result = await callGeminiAPI(prompt);
+  const text = result?.trim();
+  
+  const validZones = ['zone1_inspiration', 'zone2_work', 'zone4_knowledge', 'zone5_misc'];
+  if (text && validZones.includes(text)) {
+    return text;
   }
+  return 'zone2_work';
 };
