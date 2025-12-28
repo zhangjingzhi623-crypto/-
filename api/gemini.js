@@ -2,6 +2,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export default async function handler(req, res) {
+  // 1. 跨域设置
+  res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -12,15 +14,15 @@ export default async function handler(req, res) {
     const apiKey = (process.env.GEMINI_API_KEY || "").trim();
     if (!apiKey) return res.status(500).json({ error: '服务端未读取到 API Key' });
 
+    // 🔥 强制刷新标记：请在日志里找这句话！
+    console.log("正在尝试运行 gemini-1.5-flash (版本: 2025-12-28 修复版)");
+
     const { prompt, isJson } = req.body;
-    
     if (!prompt) return res.status(400).json({ error: 'Prompt is empty' });
 
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // 🔥 关键修改：换回 1.5 Flash
-    // 之前报 404 是因为 Key 填反了，现在 Key 好了，这个模型一定能用！
-    // 它是免费版里最快、限制最少的。
+    // 确认这里写的是 1.5-flash
     const model = genAI.getGenerativeModel({ 
         model: "gemini-1.5-flash", 
         generationConfig: isJson ? { responseMimeType: "application/json" } : {}
@@ -33,8 +35,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ text });
 
   } catch (error) {
-    console.error("生成失败:", error);
-    // 把 Google 的具体报错吐出来，方便调试
+    console.error("API Error:", error);
     return res.status(500).json({ error: error.message });
   }
 }
