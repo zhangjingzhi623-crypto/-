@@ -1,49 +1,39 @@
 // api/gemini.js
-// 这是一个通用的 OpenAI 格式接口，完美支持 DeepSeek、Kimi、通义千问等国内模型
-// 不需要安装任何 npm 包，纯原生 fetch 实现
+// 使用 Node.js 运行时，兼容性最强，连接 DeepSeek
+export default async function handler(req, res) {
+  // 1. 设置跨域 (允许你的新域名访问)
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
 
-export const config = {
-  runtime: 'edge', // 启用 Edge 运行时，速度更快
-};
-
-export default async function handler(req) {
-  // 1. 处理跨域 (让你的网站能访问)
+  // 处理预检请求
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: {
-        'Access-Control-Allow-Credentials': 'true',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
-    });
+    res.status(200).end();
+    return;
   }
 
   try {
-    // 2. 读取 DeepSeek 的 Key
-    // 注意：这里用的是你刚才新加的变量名 DEEPSEEK_API_KEY
+    // 2. 读取 DeepSeek Key
+    // 务必确认 Vercel 环境变量里配的是 DEEPSEEK_API_KEY
     const apiKey = process.env.DEEPSEEK_API_KEY;
     
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: '服务端未配置 DeepSeek API Key' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      console.error("服务端报错: 找不到 DEEPSEEK_API_KEY");
+      return res.status(500).json({ error: '服务端未配置 API Key' });
     }
 
-    // 3. 解析前端发来的数据
-    const body = await req.json();
-    const { prompt } = body;
-
+    const { prompt } = req.body;
     if (!prompt) {
-      return new Response(JSON.stringify({ error: 'Prompt cannot be empty' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return res.status(400).json({ error: 'Prompt is empty' });
     }
 
-    // 4. 向 DeepSeek 发起请求 (原生 fetch)
+    console.log("正在请求 DeepSeek...");
+
+    // 3. 发送请求给 DeepSeek
     const response = await fetch('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: {
@@ -51,44 +41,29 @@ export default async function handler(req) {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "deepseek-chat", // DeepSeek V3 模型
+        model: "deepseek-chat", 
         messages: [
           { role: "user", content: prompt }
         ],
-        temperature: 0.7
+        stream: false
       })
     });
 
-    // 5. 处理 DeepSeek 返回的结果
+    // 4. 处理结果
     const data = await response.json();
 
-    // 如果 DeepSeek 报错了
-    if (data.error) {
-      console.error("DeepSeek Error:", data.error);
-      throw new Error(data.error.message);
+    if (!response.ok) {
+      console.error("DeepSeek 报错:", data);
+      throw new Error(data.error?.message || "DeepSeek API Error");
     }
 
-    // 提取回答文本
     const answer = data.choices[0].message.content;
 
-    // 6. 返回给你的前端 (保持格式与之前兼容)
-    // 前端只要 { text: "..." }，我们这里就给它拼好
-    return new Response(JSON.stringify({ text: answer }), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      }
-    });
+    // 5. 返回给前端
+    return res.status(200).json({ text: answer });
 
   } catch (error) {
-    console.error("API Error:", error);
-    return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      }
-    });
+    console.error("API 调用失败:", error);
+    return res.status(500).json({ error: error.message });
   }
 }
